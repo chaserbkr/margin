@@ -41,54 +41,66 @@ struct ContentView: View {
     @EnvironmentObject private var appState: AppState
     @State private var showLibrary = true
     @State private var showAIPanel = false
+    @State private var showSettings = false
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Header bar
-            HeaderBar(
-                showLibrary: $showLibrary,
-                showAIPanel: $showAIPanel
-            )
-            
-            // Main content area
-            HStack(spacing: 0) {
-                // Library sidebar (conditional)
-                if showLibrary {
-                    DocumentLibraryView()
-                        .frame(width: 320)
-                        .transition(.move(edge: .leading).combined(with: .opacity))
-                    
-                    MarginDivider(vertical: true)
-                }
+        ZStack {
+            // Main app content
+            VStack(spacing: 0) {
+                // Header bar
+                HeaderBar(
+                    showLibrary: $showLibrary,
+                    showAIPanel: $showAIPanel,
+                    showSettings: $showSettings
+                )
                 
-                // Canvas area with floating picker
-                ZStack(alignment: .top) {
-                    if let canvas = Binding($appState.currentCanvas) {
-                        EditorialCanvasView(canvas: canvas)
-                            .onChange(of: canvas.wrappedValue.content) { _, _ in
-                                appState.saveCurrentCanvas()
-                            }
-                            .onChange(of: canvas.wrappedValue.title) { _, _ in
-                                appState.saveCurrentCanvas()
-                            }
+                // Main content area
+                HStack(spacing: 0) {
+                    // Library sidebar (conditional)
+                    if showLibrary {
+                        DocumentLibraryView(showSettings: $showSettings)
+                            .frame(width: 320)
+                            .transition(.move(edge: .leading).combined(with: .opacity))
                         
-                        // Floating layout mode picker
-                        LayoutModePicker(mode: canvas.layoutMode)
-                            .padding(.top, 20)
-                            .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
-                    } else {
-                        EmptyCanvasView()
+                        MarginDivider(vertical: true)
+                    }
+                    
+                    // Canvas area with floating picker
+                    ZStack(alignment: .top) {
+                        if let canvas = Binding($appState.currentCanvas) {
+                            EditorialCanvasView(canvas: canvas)
+                                .onChange(of: canvas.wrappedValue.content) { _, _ in
+                                    appState.saveCurrentCanvas()
+                                }
+                                .onChange(of: canvas.wrappedValue.title) { _, _ in
+                                    appState.saveCurrentCanvas()
+                                }
+                            
+                            // Floating layout mode picker
+                            LayoutModePicker(mode: canvas.layoutMode)
+                                .padding(.top, 20)
+                                .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
+                        } else {
+                            EmptyCanvasView()
+                        }
+                    }
+                    
+                    // AI Panel (conditional)
+                    if showAIPanel {
+                        MarginDivider(vertical: true)
+                        
+                        AIAssistPanelView()
+                            .frame(width: 360)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
                     }
                 }
-                
-                // AI Panel (conditional)
-                if showAIPanel {
-                    MarginDivider(vertical: true)
-                    
-                    AIAssistPanelView()
-                        .frame(width: 360)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
-                }
+            }
+            .blur(radius: showSettings ? 2 : 0)
+            
+            // Settings Modal Overlay
+            if showSettings {
+                SettingsModalOverlay(isPresented: $showSettings)
+                    .transition(.opacity)
             }
         }
         .background(
@@ -99,6 +111,7 @@ struct ContentView: View {
         .ignoresSafeArea(.all, edges: .top)
         .animation(.easeInOut(duration: 0.3), value: showLibrary)
         .animation(.easeInOut(duration: 0.3), value: showAIPanel)
+        .animation(.easeOut(duration: 0.15), value: showSettings)
         .onReceive(NotificationCenter.default.publisher(for: .toggleLibrary)) { _ in
             withAnimation(.easeInOut(duration: 0.3)) {
                 showLibrary.toggle()
@@ -107,6 +120,11 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .toggleAIPanel)) { _ in
             withAnimation(.easeInOut(duration: 0.3)) {
                 showAIPanel.toggle()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleSettings)) { _ in
+            withAnimation(.easeOut(duration: 0.15)) {
+                showSettings.toggle()
             }
         }
     }
@@ -118,6 +136,7 @@ struct HeaderBar: View {
     @EnvironmentObject private var appState: AppState
     @Binding var showLibrary: Bool
     @Binding var showAIPanel: Bool
+    @Binding var showSettings: Bool
     
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
@@ -128,8 +147,9 @@ struct HeaderBar: View {
                     .frame(width: 1, height: 16)
                     .padding(.trailing, 12)
                 
-                Text("Margin")
-                    .font(.custom("Georgia-Italic", size: 15))
+                Text("Margin.")
+                    .font(.custom("PlayfairDisplay-Bold", size: 18))
+                    .tracking(-0.5)
                     .foregroundColor(MarginColors.ink)
             }
             .padding(.leading, 78)
@@ -148,7 +168,9 @@ struct HeaderBar: View {
                 }
                 
                 Button {
-                    showLibrary.toggle()
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        showLibrary.toggle()
+                    }
                 } label: {
                     Image(systemName: "sidebar.left")
                         .font(.system(size: 14))
@@ -158,7 +180,9 @@ struct HeaderBar: View {
                 .help("Document Library")
                 
                 Button {
-                    showAIPanel.toggle()
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        showAIPanel.toggle()
+                    }
                 } label: {
                     Image(systemName: "sparkles")
                         .font(.system(size: 14))
@@ -166,6 +190,18 @@ struct HeaderBar: View {
                 }
                 .buttonStyle(.plain)
                 .help("AI Assist")
+                
+                Button {
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        showSettings.toggle()
+                    }
+                } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 14))
+                        .foregroundColor(MarginColors.stone400)
+                }
+                .buttonStyle(.plain)
+                .help("Settings")
             }
             .padding(.trailing, 24)
         }
@@ -219,6 +255,7 @@ struct EmptyCanvasView: View {
 
 struct DocumentLibraryView: View {
     @EnvironmentObject private var appState: AppState
+    @Binding var showSettings: Bool
     @State private var searchText = ""
     
     var filteredCanvases: [Canvas] {
@@ -279,18 +316,50 @@ struct DocumentLibraryView: View {
             
             // Document list
             ScrollView {
-                LazyVStack(spacing: 2) {
+                LazyVStack(spacing: 4) {
                     ForEach(filteredCanvases) { canvas in
                         DocumentRowView(
                             canvas: canvas,
-                            isSelected: appState.currentCanvas?.id == canvas.id
-                        ) {
-                            appState.selectCanvas(canvas)
-                        }
+                            isSelected: appState.currentCanvas?.id == canvas.id,
+                            action: {
+                                appState.selectCanvas(canvas)
+                            },
+                            onDuplicate: {
+                                appState.duplicateCanvas(canvas)
+                            },
+                            onDelete: {
+                                appState.deleteCanvas(canvas)
+                            }
+                        )
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 12)
                 .padding(.bottom, 24)
+            }
+            
+            Spacer()
+            
+            // Settings footer
+            Button {
+                withAnimation(.easeOut(duration: 0.15)) {
+                    showSettings = true
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 14))
+                    Text("SETTINGS")
+                        .font(MarginTypography.ui(size: 11, weight: .medium))
+                        .tracking(1)
+                }
+                .foregroundColor(MarginColors.stone400)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 16)
+            }
+            .buttonStyle(.plain)
+            .overlay(alignment: .top) {
+                MarginDivider()
             }
         }
         .background(MarginColors.stone50.opacity(0.3))
@@ -301,84 +370,118 @@ struct DocumentRowView: View {
     let canvas: Canvas
     let isSelected: Bool
     let action: () -> Void
-    
+    let onDuplicate: () -> Void
+    let onDelete: () -> Void
+
     @State private var isHovered = false
-    
+
     private var displayTitle: String {
         canvas.title.isEmpty ? "Untitled" : canvas.title
     }
-    
+
     private var wordCount: Int {
-        canvas.content.plainText.split(separator: " ").count
+        let text = canvas.content.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.isEmpty { return 0 }
+        return text.split(separator: " ").count
     }
-    
+
+    private var formattedDate: String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(canvas.updatedAt) {
+            return "Today"
+        } else if calendar.isDateInYesterday(canvas.updatedAt) {
+            return "Yesterday"
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d"
+            return formatter.string(from: canvas.updatedAt)
+        }
+    }
+
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 16) {
+            HStack(spacing: 12) {
                 // Icon
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isHovered || isSelected ? MarginColors.ink : MarginColors.stone100)
-                    .frame(width: 40, height: 40)
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isSelected ? MarginColors.ink : MarginColors.stone100)
+                    .frame(width: 32, height: 32)
                     .overlay(
                         Image(systemName: "doc.text")
-                            .font(.system(size: 16))
-                            .foregroundColor(isHovered || isSelected ? MarginColors.paper : MarginColors.stone400)
+                            .font(.system(size: 13))
+                            .foregroundColor(isSelected ? MarginColors.paper : MarginColors.stone400)
                     )
-                
+
                 // Content
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(displayTitle)
-                        .font(.custom("Georgia", size: 17))
+                        .font(.custom("Georgia", size: 15))
                         .foregroundColor(MarginColors.ink)
                         .lineLimit(1)
-                    
-                    HStack(spacing: 8) {
-                        Text(canvas.layoutMode.displayName.uppercased())
-                            .font(MarginTypography.mono(size: 10))
-                        Circle()
-                            .fill(MarginColors.stone200)
-                            .frame(width: 3, height: 3)
-                        Text("\(wordCount) WORDS")
-                            .font(MarginTypography.mono(size: 10))
+
+                    HStack(spacing: 6) {
+                        Text(formattedDate)
+                        Text("·")
+                        Text("\(wordCount) words")
                     }
+                    .font(MarginTypography.ui(size: 11))
                     .foregroundColor(MarginColors.stone400)
                 }
-                
+
                 Spacer()
-                
-                // Date
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text(canvas.updatedAt, style: .date)
-                        .font(MarginTypography.ui(size: 11))
-                        .foregroundColor(MarginColors.stone400)
-                    
-                    Text("Draft")
-                        .font(MarginTypography.mono(size: 9))
-                        .foregroundColor(MarginColors.stone300)
-                        .textCase(.uppercase)
+
+                // Menu button
+                Menu {
+                    Button {
+                        onDuplicate()
+                    } label: {
+                        Label("Duplicate", systemImage: "doc.on.doc")
+                    }
+
+                    Divider()
+
+                    Button(role: .destructive) {
+                        onDelete()
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(MarginColors.ink.opacity(0.5))
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
                 }
-                
-                // Chevron
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(MarginColors.stone300)
-                    .opacity(isHovered ? 1 : 0)
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .opacity(isHovered || isSelected ? 1 : 0)
             }
-            .padding(16)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
             .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? MarginColors.stone100 : (isHovered ? MarginColors.ink.opacity(0.02) : Color.clear))
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isSelected ? MarginColors.stone100 : (isHovered ? MarginColors.ink.opacity(0.03) : Color.clear))
             )
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            withAnimation(.easeOut(duration: 0.15)) {
+            withAnimation(.easeOut(duration: 0.12)) {
                 isHovered = hovering
             }
         }
         .contextMenu {
-            Button("Delete", role: .destructive) {
-                // Delete action
+            Button {
+                onDuplicate()
+            } label: {
+                Label("Duplicate", systemImage: "doc.on.doc")
+            }
+
+            Divider()
+
+            Button(role: .destructive) {
+                onDelete()
+            } label: {
+                Label("Delete", systemImage: "trash")
             }
         }
     }
@@ -666,6 +769,373 @@ struct TypeSystemRow: View {
         }
         .buttonStyle(.plain)
     }
+}
+
+// MARK: - Settings Modal Overlay
+
+struct SettingsModalOverlay: View {
+    @EnvironmentObject private var appState: AppState
+    @Binding var isPresented: Bool
+    
+    // Staged settings values (local copy for editing)
+    @State private var stagedTypography: TypeSystem = .editorialSerif
+    @State private var stagedInterfaceTheme: InterfaceTheme = .light
+    @State private var stagedFontSize: Double = 18
+    @State private var stagedLineHeight: Double = 1.6
+    @State private var stagedLocalStorageOnly: Bool = true
+    @State private var stagedAutoSave: Bool = true
+    
+    // Animation state
+    @State private var modalScale: CGFloat = 0.95
+    @State private var modalOpacity: Double = 0
+    
+    var body: some View {
+        ZStack {
+            // Dimmed background overlay
+            Color.black.opacity(0.4)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    dismissModal()
+                }
+            
+            // Modal container
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Text("Settings")
+                        .font(.custom("Georgia-Italic", size: 32))
+                        .foregroundColor(MarginColors.ink)
+                    
+                    Spacer()
+                    
+                    Button {
+                        dismissModal()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(MarginColors.stone400)
+                            .frame(width: 32, height: 32)
+                            .background(MarginColors.stone100.opacity(0.5))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 32)
+                .padding(.top, 32)
+                .padding(.bottom, 24)
+                
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 32) {
+                        // EDITOR APPEARANCE Section
+                        SettingsModalSection(title: "EDITOR APPEARANCE") {
+                            VStack(spacing: 24) {
+                                // Typography & Theme row
+                                HStack(alignment: .top, spacing: 48) {
+                                    // Typography
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        Text("Typography")
+                                            .font(MarginTypography.ui(size: 14, weight: .medium))
+                                            .foregroundColor(MarginColors.ink)
+                                        
+                                        SettingsSegmentedPicker(
+                                            options: ["Serif", "Sans", "Mono"],
+                                            selected: typographyBinding
+                                        )
+                                    }
+                                    
+                                    // Interface Theme
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        Text("Interface Theme")
+                                            .font(MarginTypography.ui(size: 14, weight: .medium))
+                                            .foregroundColor(MarginColors.ink)
+                                        
+                                        HStack(spacing: 8) {
+                                            ForEach(InterfaceTheme.allCases, id: \.self) { theme in
+                                                Button {
+                                                    stagedInterfaceTheme = theme
+                                                } label: {
+                                                    RoundedRectangle(cornerRadius: 6)
+                                                        .fill(theme.previewColor)
+                                                        .frame(width: 48, height: 32)
+                                                        .overlay(
+                                                            RoundedRectangle(cornerRadius: 6)
+                                                                .stroke(stagedInterfaceTheme == theme ? MarginColors.ink : MarginColors.stone200, lineWidth: stagedInterfaceTheme == theme ? 2 : 1)
+                                                        )
+                                                }
+                                                .buttonStyle(.plain)
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                // Font Size & Line Height row
+                                HStack(alignment: .top, spacing: 48) {
+                                    // Font Size
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        Text("Font Size")
+                                            .font(MarginTypography.ui(size: 14, weight: .medium))
+                                            .foregroundColor(MarginColors.ink)
+                                        
+                                        HStack(spacing: 16) {
+                                            Slider(value: $stagedFontSize, in: 12...24, step: 1)
+                                                .frame(width: 160)
+                                            Text("\(Int(stagedFontSize))px")
+                                                .font(MarginTypography.ui(size: 13))
+                                                .foregroundColor(MarginColors.stone500)
+                                                .frame(width: 40, alignment: .trailing)
+                                        }
+                                    }
+                                    
+                                    // Line Height
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        Text("Line Height")
+                                            .font(MarginTypography.ui(size: 14, weight: .medium))
+                                            .foregroundColor(MarginColors.ink)
+                                        
+                                        HStack(spacing: 16) {
+                                            Slider(value: $stagedLineHeight, in: 1.2...2.0, step: 0.1)
+                                                .frame(width: 160)
+                                            Text(String(format: "%.1f", stagedLineHeight))
+                                                .font(MarginTypography.ui(size: 13))
+                                                .foregroundColor(MarginColors.stone500)
+                                                .frame(width: 40, alignment: .trailing)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // PRIVACY & LOCAL FIRST Section
+                        SettingsModalSection(title: "PRIVACY & LOCAL FIRST") {
+                            VStack(spacing: 20) {
+                                // Local Storage Only
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Local Storage Only")
+                                            .font(MarginTypography.ui(size: 14, weight: .medium))
+                                            .foregroundColor(MarginColors.ink)
+                                        Text("Your documents are encrypted and stored locally on this Mac. No cloud syncing enabled.")
+                                            .font(MarginTypography.ui(size: 12))
+                                            .foregroundColor(MarginColors.stone400)
+                                    }
+                                    Spacer()
+                                    Toggle("", isOn: $stagedLocalStorageOnly)
+                                        .labelsHidden()
+                                        .toggleStyle(SwitchToggleStyle(tint: MarginColors.ink))
+                                }
+                                
+                                MarginDivider()
+                                
+                                // Auto-save Interval
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Auto-save Interval")
+                                            .font(MarginTypography.ui(size: 14, weight: .medium))
+                                            .foregroundColor(MarginColors.ink)
+                                        Text("Save every 30 seconds of inactivity.")
+                                            .font(MarginTypography.ui(size: 12))
+                                            .foregroundColor(MarginColors.stone400)
+                                    }
+                                    Spacer()
+                                    Toggle("", isOn: $stagedAutoSave)
+                                        .labelsHidden()
+                                        .toggleStyle(SwitchToggleStyle(tint: MarginColors.ink))
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 32)
+                    .padding(.bottom, 24)
+                }
+                
+                // Footer buttons
+                HStack {
+                    Button {
+                        resetToDefaults()
+                    } label: {
+                        Text("RESET DEFAULTS")
+                            .font(MarginTypography.ui(size: 11, weight: .medium))
+                            .tracking(1)
+                            .foregroundColor(MarginColors.stone400)
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Spacer()
+                    
+                    HStack(spacing: 16) {
+                        Button {
+                            dismissModal()
+                        } label: {
+                            Text("CANCEL")
+                                .font(MarginTypography.ui(size: 12, weight: .medium))
+                                .tracking(0.5)
+                                .foregroundColor(MarginColors.stone500)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 12)
+                        }
+                        .buttonStyle(.plain)
+                        
+                        Button {
+                            saveChanges()
+                        } label: {
+                            Text("SAVE CHANGES")
+                                .font(MarginTypography.ui(size: 12, weight: .medium))
+                                .tracking(0.5)
+                                .foregroundColor(MarginColors.paper)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 12)
+                                .background(MarginColors.ink)
+                                .cornerRadius(8)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 32)
+                .padding(.vertical, 24)
+                .overlay(alignment: .top) {
+                    MarginDivider()
+                }
+            }
+            .frame(width: 580, height: 520)
+            .background(MarginColors.paper)
+            .cornerRadius(16)
+            .shadow(color: MarginColors.ink.opacity(0.15), radius: 40, x: 0, y: 20)
+            .shadow(color: MarginColors.ink.opacity(0.1), radius: 10, x: 0, y: 5)
+            .scaleEffect(modalScale)
+            .opacity(modalOpacity)
+        }
+        .onAppear {
+            loadCurrentSettings()
+            withAnimation(.easeOut(duration: 0.15)) {
+                modalScale = 1.0
+                modalOpacity = 1.0
+            }
+        }
+        .onExitCommand {
+            dismissModal()
+        }
+    }
+    
+    private var typographyBinding: Binding<Int> {
+        Binding(
+            get: {
+                switch stagedTypography {
+                case .editorialSerif: return 0
+                case .modernSans: return 1
+                case .technicalMono: return 2
+                case .humanistSans: return 1 // Map to Sans
+                }
+            },
+            set: { newValue in
+                switch newValue {
+                case 0: stagedTypography = .editorialSerif
+                case 1: stagedTypography = .modernSans
+                case 2: stagedTypography = .technicalMono
+                default: break
+                }
+            }
+        )
+    }
+    
+    private func loadCurrentSettings() {
+        stagedTypography = appState.settings.defaultTypeSystem
+        stagedFontSize = 18
+        stagedLineHeight = 1.6
+        stagedLocalStorageOnly = true
+        stagedAutoSave = true
+    }
+    
+    private func saveChanges() {
+        appState.settings.defaultTypeSystem = stagedTypography
+        // Apply other settings as needed
+        dismissModal()
+    }
+    
+    private func resetToDefaults() {
+        stagedTypography = .editorialSerif
+        stagedInterfaceTheme = .light
+        stagedFontSize = 18
+        stagedLineHeight = 1.6
+        stagedLocalStorageOnly = true
+        stagedAutoSave = true
+    }
+    
+    private func dismissModal() {
+        withAnimation(.easeIn(duration: 0.12)) {
+            modalScale = 0.95
+            modalOpacity = 0
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            isPresented = false
+        }
+    }
+}
+
+// MARK: - Settings Modal Components
+
+struct SettingsModalSection<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(title)
+                .font(MarginTypography.ui(size: 11, weight: .semibold))
+                .tracking(2)
+                .foregroundColor(MarginColors.stone400)
+            
+            content
+        }
+    }
+}
+
+struct SettingsSegmentedPicker: View {
+    let options: [String]
+    @Binding var selected: Int
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(options.indices, id: \.self) { index in
+                Button {
+                    selected = index
+                } label: {
+                    Text(options[index])
+                        .font(MarginTypography.ui(size: 13, weight: .medium))
+                        .foregroundColor(selected == index ? MarginColors.ink : MarginColors.stone400)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(selected == index ? MarginColors.paper : Color.clear)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
+        .background(MarginColors.stone100.opacity(0.5))
+        .cornerRadius(8)
+    }
+}
+
+// MARK: - Interface Theme
+
+enum InterfaceTheme: CaseIterable {
+    case light, dark, darker
+    
+    var previewColor: Color {
+        switch self {
+        case .light: return MarginColors.paper
+        case .dark: return MarginColors.stone800
+        case .darker: return MarginColors.stone900
+        }
+    }
+}
+
+// MARK: - Notification Extension
+
+extension Notification.Name {
+    static let toggleSettings = Notification.Name("toggleSettings")
 }
 
 #Preview {

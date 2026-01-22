@@ -12,6 +12,16 @@ enum MarginColors {
     // NSColor versions for AppKit
     static let inkNS = NSColor(red: 0x1C/255.0, green: 0x1C/255.0, blue: 0x1E/255.0, alpha: 1.0)
     static let paperNS = NSColor(red: 0xFD/255.0, green: 0xFC/255.0, blue: 0xF8/255.0, alpha: 1.0)
+    static let stone300NS = NSColor(red: 0xD4/255.0, green: 0xD4/255.0, blue: 0xCD/255.0, alpha: 1.0)
+    static let stone500NS = NSColor(red: 0x73/255.0, green: 0x73/255.0, blue: 0x6D/255.0, alpha: 1.0)
+    
+    // Selection color - uses system accent (adapts to light/dark mode)
+    static var selection: Color { Color.accentColor }
+    static var selectionNS: NSColor { NSColor.controlAccentColor }
+    
+    // Selection color variants for UI states
+    static var selectionLight: NSColor { NSColor.controlAccentColor.withAlphaComponent(0.2) }
+    static var selectionMedium: NSColor { NSColor.controlAccentColor.withAlphaComponent(0.5) }
     
     // Stone scale (warm grays)
     static let stone50 = Color(hex: "FBFBF9")
@@ -151,6 +161,7 @@ struct MarginPrimaryButtonStyle: ButtonStyle {
             .cornerRadius(10)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+            .pointerCursor()
     }
 }
 
@@ -169,6 +180,7 @@ struct MarginSecondaryButtonStyle: ButtonStyle {
             .cornerRadius(10)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+            .pointerCursor()
     }
 }
 
@@ -190,6 +202,7 @@ struct MarginIconButtonStyle: ButtonStyle {
 
 struct LayoutModePicker: View {
     @Binding var mode: LayoutMode
+    @State private var isVisible = false
     
     var body: some View {
         HStack(spacing: 0) {
@@ -198,19 +211,30 @@ struct LayoutModePicker: View {
                     layoutMode: layoutMode,
                     isSelected: mode == layoutMode
                 ) {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(.easeOut(duration: 0.15)) {
                         mode = layoutMode
                     }
                 }
             }
         }
-        .padding(3)
-        .background(MarginColors.stone100.opacity(0.5))
-        .cornerRadius(8)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(MarginColors.stone200.opacity(0.5), lineWidth: 1)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 4)
+        .background(
+            Capsule()
+                .fill(Color(hex: "FAF9F7")) // Warm off-white matching toolbar
         )
+        // Multi-layer shadow system (matching floating toolbar)
+        .shadow(color: Color(hex: "1C1C1E").opacity(0.05), radius: 0, x: 0, y: 0)
+        .shadow(color: Color(hex: "1C1C1E").opacity(0.04), radius: 6, x: 0, y: 4)
+        .shadow(color: Color(hex: "1C1C1E").opacity(0.08), radius: 18, x: 0, y: 12)
+        // Entry animation
+        .scaleEffect(isVisible ? 1.0 : 0.98)
+        .opacity(isVisible ? 1.0 : 0)
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.15)) {
+                isVisible = true
+            }
+        }
     }
 }
 
@@ -219,20 +243,53 @@ struct LayoutModeButton: View {
     let isSelected: Bool
     let action: () -> Void
     
+    @State private var isHovered = false
+    @State private var isPressed = false
+    
+    private var backgroundColor: Color {
+        if isPressed && isSelected {
+            return MarginColors.stone200.opacity(0.8)
+        } else if isSelected {
+            return MarginColors.paper
+        } else if isHovered {
+            return MarginColors.stone100.opacity(0.5)
+        }
+        return .clear
+    }
+    
+    private var foregroundColor: Color {
+        isSelected ? MarginColors.ink : MarginColors.stone400
+    }
+    
     var body: some View {
         Button(action: action) {
             Text(layoutMode.displayName)
-                .font(MarginTypography.ui(size: 11, weight: .medium))
-                .foregroundColor(isSelected ? MarginColors.ink : MarginColors.stone500)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 5)
+                .font(MarginTypography.ui(size: 12, weight: .medium))
+                .foregroundColor(foregroundColor)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
                 .background(
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(isSelected ? MarginColors.paper : Color.clear)
-                        .shadow(color: isSelected ? MarginColors.ink.opacity(0.05) : .clear, radius: 2, y: 1)
+                    Capsule()
+                        .fill(backgroundColor)
+                        .shadow(color: isSelected ? MarginColors.ink.opacity(0.04) : .clear, radius: 2, y: 1)
                 )
+                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .pointerCursor()
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.1)) {
+                isHovered = hovering
+            }
+        }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
+        .accessibilityLabel("\(layoutMode.displayName) mode")
+        .accessibilityHint(layoutMode.tagline)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }
 
@@ -270,5 +327,47 @@ struct MarginDivider: View {
                 .fill(MarginColors.stone100)
                 .frame(height: 1)
         }
+    }
+}
+
+// MARK: - Cursor Modifiers
+
+/// A view modifier that shows the pointer (hand) cursor on hover for interactive elements
+struct PointerCursorModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .onHover { isHovering in
+                if isHovering {
+                    NSCursor.pointingHand.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+    }
+}
+
+/// A view modifier that shows the arrow cursor on hover (useful for overriding inherited I-beam cursors)
+struct ArrowCursorModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .onHover { isHovering in
+                if isHovering {
+                    NSCursor.arrow.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+    }
+}
+
+extension View {
+    /// Shows the pointer (hand) cursor on hover - use for clickable interactive elements
+    func pointerCursor() -> some View {
+        modifier(PointerCursorModifier())
+    }
+    
+    /// Shows the arrow cursor on hover - use to override inherited I-beam cursors
+    func arrowCursor() -> some View {
+        modifier(ArrowCursorModifier())
     }
 }

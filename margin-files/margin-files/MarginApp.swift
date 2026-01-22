@@ -73,6 +73,43 @@ struct MarginApp: App {
                         NSApp.sendAction(#selector(EditorialNSTextView.toggleItalic(_:)), to: nil, from: nil)
                     }
                     .keyboardShortcut("i", modifiers: .command)
+                    
+                    Button("Underline") {
+                        NSApp.sendAction(#selector(EditorialNSTextView.toggleUnderline(_:)), to: nil, from: nil)
+                    }
+                    .keyboardShortcut("u", modifiers: .command)
+                    
+                    Button("Strikethrough") {
+                        NSApp.sendAction(#selector(EditorialNSTextView.toggleStrikethrough(_:)), to: nil, from: nil)
+                    }
+                    .keyboardShortcut("x", modifiers: [.command, .shift])
+                }
+                
+                Divider()
+                
+                Section("Links") {
+                    Button("Add Link...") {
+                        NSApp.sendAction(#selector(EditorialNSTextView.insertLink(_:)), to: nil, from: nil)
+                    }
+                    .keyboardShortcut("k", modifiers: .command)
+                    
+                    Button("Remove Link") {
+                        NSApp.sendAction(#selector(EditorialNSTextView.removeLink(_:)), to: nil, from: nil)
+                    }
+                }
+                
+                Divider()
+                
+                Section("Lists") {
+                    Button("Bullet List") {
+                        NSApp.sendAction(#selector(EditorialNSTextView.toggleBulletList(_:)), to: nil, from: nil)
+                    }
+                    .keyboardShortcut("8", modifiers: [.command, .shift])
+                    
+                    Button("Numbered List") {
+                        NSApp.sendAction(#selector(EditorialNSTextView.toggleNumberedList(_:)), to: nil, from: nil)
+                    }
+                    .keyboardShortcut("7", modifiers: [.command, .shift])
                 }
             }
             
@@ -81,11 +118,18 @@ struct MarginApp: App {
                     NotificationCenter.default.post(name: .toggleLibrary, object: nil)
                 }
                 .keyboardShortcut("l", modifiers: [.command, .shift])
-                
+
                 Button("Toggle AI Assistant") {
                     NotificationCenter.default.post(name: .toggleAIPanel, object: nil)
                 }
                 .keyboardShortcut("a", modifiers: [.command, .shift])
+
+                Divider()
+
+                Button("Search Documents") {
+                    NotificationCenter.default.post(name: .toggleSearch, object: nil)
+                }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
             }
         }
         
@@ -101,4 +145,5 @@ struct MarginApp: App {
 extension Notification.Name {
     static let toggleLibrary = Notification.Name("toggleLibrary")
     static let toggleAIPanel = Notification.Name("toggleAIPanel")
+    static let toggleSearch = Notification.Name("toggleSearch")
 }

@@ -29,14 +29,17 @@ enum TypeSystem: String, CaseIterable, Codable {
     // MARK: - Fonts
     
     var bodyFont: NSFont {
-        let size: CGFloat = 19
+        return bodyFont(size: 18) // Default size
+    }
+    
+    func bodyFont(size: CGFloat) -> NSFont {
         switch self {
         case .editorialSerif:
             return NSFont(name: "Georgia", size: size) ?? NSFont.systemFont(ofSize: size)
         case .modernSans:
             return NSFont.systemFont(ofSize: size, weight: .regular)
         case .technicalMono:
-            return NSFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+            return NSFont.monospacedSystemFont(ofSize: size * 0.85, weight: .regular)
         case .humanistSans:
             return NSFont(name: "Avenir Next", size: size) ?? NSFont.systemFont(ofSize: size)
         }
@@ -112,11 +115,28 @@ enum TypeSystem: String, CaseIterable, Codable {
         }
     }
     
+    func swiftUITitleFont(size: CGFloat) -> Font {
+        switch self {
+        case .editorialSerif:
+            return .custom("InstrumentSerif-Regular", size: size)
+        case .modernSans:
+            return .system(size: size, weight: .bold)
+        case .technicalMono:
+            return .system(size: size, weight: .bold, design: .monospaced)
+        case .humanistSans:
+            return .custom("Avenir Next Bold", size: size)
+        }
+    }
+    
     // MARK: - Paragraph Styles
     
     var bodyParagraphStyle: NSMutableParagraphStyle {
+        return bodyParagraphStyle(lineHeight: 1.65) // Default
+    }
+    
+    func bodyParagraphStyle(lineHeight: CGFloat) -> NSMutableParagraphStyle {
         let style = NSMutableParagraphStyle()
-        style.lineHeightMultiple = 1.5
+        style.lineHeightMultiple = lineHeight
         style.paragraphSpacing = 12
         return style
     }
@@ -124,6 +144,13 @@ enum TypeSystem: String, CaseIterable, Codable {
     func bodyParagraphStyle(for layout: LayoutMode) -> NSMutableParagraphStyle {
         let style = NSMutableParagraphStyle()
         style.lineHeightMultiple = layout.lineHeightMultiple
+        style.paragraphSpacing = 12 * layout.paragraphSpacing
+        return style
+    }
+    
+    func bodyParagraphStyle(for layout: LayoutMode, lineHeight: CGFloat) -> NSMutableParagraphStyle {
+        let style = NSMutableParagraphStyle()
+        style.lineHeightMultiple = lineHeight
         style.paragraphSpacing = 12 * layout.paragraphSpacing
         return style
     }

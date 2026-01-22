@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Image Pile Component</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      background: linear-gradient(145deg, #1a1a2e 0%, #16213e 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow: hidden;
+    }
+
+    .component-container {
+      position: relative;
+      width: 90vw;
+      max-width: 600px;
+      aspect-ratio: 4 / 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Single Image Mode */
+    .single-image {
+      width: 100%;
+      height: 100%;
+      border-radius: 12px;
+      object-fit: cover;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Pile Mode */
+    .pile-container {
+      position: relative;
+      width: 70%;
+      height: 80%;
+    }
+
+    .pile-card {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 12px;
+      overflow: hidden;
+      cursor: grab;
+      transition: transform 0.4s cubic-bezier(0.23, 1, 0.32, 1),
+                  box-shadow 0.3s ease;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+      will-change: transform;
+      user-select: none;
+      background: #2a2a3e;
+    }
+
+    .pile-card:active {
+      cursor: grabbing;
+    }
+
+    .pile-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      pointer-events: none;
+      -webkit-user-drag: none;
+    }
+
+    .pile-card.hovered:not(.dragging):not(.top-card) {
+      transform: var(--hover-transform) !important;
+      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.35);
+    }
+
+    .pile-card.top-card {
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+    }
+
+    .pile-card.dragging {
+      transition: box-shadow 0.2s ease;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+      z-index: 1000 !important;
+    }
+
+    .pile-card.animating-out {
+      transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1),
+                  opacity 0.5s ease;
+    }
+
+    .pile-card.animating-back {
+      transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+    }
+
+    /* Navigation Arrows */
+    .nav-arrow {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 44px;
+      height: 44px;
+      border: none;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 20px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.3s ease, background 0.2s ease, transform 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    .component-container:hover .nav-arrow {
+      opacity: 1;
+    }
+
+    .nav-arrow:hover {
+      background: rgba(255, 255, 255, 0.2);
+      color: rgba(255, 255, 255, 0.9);
+      transform: translateY(-50%) scale(1.1);
+    }
+
+    .nav-arrow:active {
+      transform: translateY(-50%) scale(0.95);
+    }
+
+    .nav-arrow.left {
+      left: -60px;
+    }
+
+    .nav-arrow.right {
+      right: -60px;
+    }
+
+    .nav-arrow svg {
+      width: 20px;
+      height: 20px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+    }
+
+    /* Image Counter */
+    .image-counter {
+      position: absolute;
+      bottom: -40px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      padding: 8px 16px;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+    }
+
+    .counter-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.3);
+      transition: background 0.3s ease, transform 0.3s ease;
+    }
+
+    .counter-dot.active {
+      background: rgba(255, 255, 255, 0.9);
+      transform: scale(1.2);
+    }
+
+    /* Edit Controls (Demo only) */
+    .edit-controls {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 12px;
+    }
+
+    .edit-btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      color: white;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+
+    .edit-btn:hover {
+      background: rgba(255, 255, 255, 0.25);
+      transform: translateY(-2px);
+    }
+
+    .edit-btn:active {
+      transform: translateY(0);
+    }
+
+    .edit-btn.danger {
+      background: rgba(239, 68, 68, 0.3);
+    }
+
+    .edit-btn.danger:hover {
+      background: rgba(239, 68, 68, 0.5);
+    }
+
+    /* Hidden file input */
+    #fileInput {
+      display: none;
+    }
+
+    /* Loading state */
+    .pile-card.loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .pile-card.loading::after {
+      content: '';
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(255, 255, 255, 0.2);
+      border-top-color: rgba(255, 255, 255, 0.8);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Empty state */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      border: 2px dashed rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      color: rgba(255, 255, 255, 0.5);
+      cursor: pointer;
+      transition: border-color 0.3s ease, color 0.3s ease;
+    }
+
+    .empty-state:hover {
+      border-color: rgba(255, 255, 255, 0.4);
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .empty-state svg {
+      width: 48px;
+      height: 48px;
+      margin-bottom: 12px;
+      stroke: currentColor;
+      stroke-width: 1.5;
+      fill: none;
+    }
+
+    .empty-state span {
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="component-container" id="componentContainer">
+    <!-- Content rendered by JS -->
+  </div>
+
+  <div class="edit-controls">
+    <button class="edit-btn" onclick="addImages()">+ Add Images</button>
+    <button class="edit-btn danger" onclick="removeTopImage()">Remove Top</button>
+  </div>
+
+  <input type="file" id="fileInput" multiple accept="image/*" onchange="handleFileSelect(event)">
+
+  <script>
+    // ============================================
+    // IMAGE PILE COMPONENT
+    // Ready for Swift/WKWebView integration
+    // ============================================
+
+    class ImagePileComponent {
+      constructor(container, options = {}) {
+        this.container = container;
+        this.images = options.images || [];
+        this.currentIndex = 0;
+        this.isDragging = false;
+        this.dragStartX = 0;
+        this.dragStartY = 0;
+        this.dragOffsetX = 0;
+        this.dragOffsetY = 0;
+        this.activeCard = null;
+        this.dragStartTime = 0;
+        this.initialTransform = '';
+
+        // Callbacks for Swift bridge
+        this.onImagesChange = options.onImagesChange || null;
+        this.onImageSelect = options.onImageSelect || null;
+
+        this.init();
+      }
+
+      init() {
+        this.render();
+        this.bindEvents();
+      }
+
+      // Generate scattered positions for pile effect
+      generateScatterTransform(index, total) {
+        const seed = index * 137.5; // Golden angle for nice distribution
+        const rotation = (Math.sin(seed) * 8) - 4; // -4 to 4 degrees
+        const offsetX = (Math.cos(seed) * 15) - 7.5; // -7.5 to 7.5 px
+        const offsetY = (Math.sin(seed * 2) * 10) - 5; // -5 to 5 px
+
+        return {
+          rotation,
+          offsetX,
+          offsetY,
+          transform: `translate(${offsetX}px, ${offsetY}px) rotate(${rotation}deg)`
+        };
+      }
+
+      render() {
+        const count = this.images.length;
+
+        if (count === 0) {
+          this.renderEmptyState();
+        } else if (count === 1) {
+          this.renderSingleImage();
+        } else {
+          this.renderPile();
+        }
+      }
+
+      renderEmptyState() {
+        this.container.innerHTML = `
+          <div class="empty-state" onclick="addImages()">
+            <svg viewBox="0 0 24 24">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+            <span>Click to add images</span>
+          </div>
+        `;
+      }
+
+      renderSingleImage() {
+        const img = this.images[0];
+        this.container.innerHTML = `
+          <img class="single-image" src="${img.src}" alt="${img.alt || 'Image'}">
+        `;
+      }
+
+      renderPile() {
+        const count = this.images.length;
+
+        // Create pile container
+        let html = '<div class="pile-container" id="pileContainer">';
+
+        // Render cards in reverse order so top card is last in DOM
+        const orderedImages = this.getOrderedImages();
+
+        orderedImages.forEach((img, visualIndex) => {
+          const scatter = this.generateScatterTransform(img.originalIndex, count);
+          const zIndex = visualIndex + 1;
+          const isTop = visualIndex === count - 1;
+
+          // Calculate hover transform (slide out more)
+          const hoverRotation = scatter.rotation * 0.5;
+          const hoverOffsetX = scatter.offsetX + (scatter.offsetX > 0 ? 20 : -20);
+          const hoverOffsetY = scatter.offsetY - 30;
+          const hoverTransform = `translate(${hoverOffsetX}px, ${hoverOffsetY}px) rotate(${hoverRotation}deg) scale(1.02)`;
+
+          html += `
+            <div class="pile-card ${isTop ? 'top-card' : ''}"
+                 data-index="${img.originalIndex}"
+                 data-visual-index="${visualIndex}"
+                 style="z-index: ${zIndex}; transform: ${scatter.transform}; --hover-transform: ${hoverTransform};">
+              <img src="${img.src}" alt="${img.alt || 'Image'}">
+            </div>
+          `;
+        });
+
+        html += '</div>';
+
+        // Add navigation arrows
+        html += `
+          <button class="nav-arrow left" onclick="imagePile.navigate(-1)">
+            <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <button class="nav-arrow right" onclick="imagePile.navigate(1)">
+            <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        `;
+
+        // Add counter dots
+        html += '<div class="image-counter">';
+        for (let i = 0; i < count; i++) {
+          const isActive = i === this.currentIndex;
+          html += `<div class="counter-dot ${isActive ? 'active' : ''}" data-index="${i}"></div>`;
+        }
+        html += '</div>';
+
+        this.container.innerHTML = html;
+        this.bindCardEvents();
+      }
+
+      getOrderedImages() {
+        // Return images ordered so currentIndex is on top
+        const count = this.images.length;
+        const ordered = [];
+
+        for (let i = 0; i < count; i++) {
+          const actualIndex = (this.currentIndex + 1 + i) % count;
+          ordered.push({
+            ...this.images[actualIndex],
+            originalIndex: actualIndex
+          });
+        }
+
+        return ordered;
+      }
+
+      bindEvents() {
+        // Global mouse/touch events for dragging
+        document.addEventListener('mousemove', (e) => this.onDragMove(e));
+        document.addEventListener('mouseup', (e) => this.onDragEnd(e));
+        document.addEventListener('touchmove', (e) => this.onDragMove(e), { passive: false });
+        document.addEventListener('touchend', (e) => this.onDragEnd(e));
+      }
+
+      bindCardEvents() {
+        const cards = this.container.querySelectorAll('.pile-card');
+
+        cards.forEach(card => {
+          // Hover effects
+          card.addEventListener('mouseenter', () => {
+            if (!this.isDragging) {
+              card.classList.add('hovered');
+            }
+          });
+
+          card.addEventListener('mouseleave', () => {
+            card.classList.remove('hovered');
+          });
+
+          // Click to bring to front
+          card.addEventListener('click', (e) => {
+            if (!this.isDragging && Math.abs(this.dragOffsetX) < 5 && Math.abs(this.dragOffsetY) < 5) {
+              const index = parseInt(card.dataset.index);
+              this.bringToFront(index);
+            }
+          });
+
+          // Drag start
+          card.addEventListener('mousedown', (e) => this.onDragStart(e, card));
+          card.addEventListener('touchstart', (e) => this.onDragStart(e, card), { passive: false });
+        });
+      }
+
+      onDragStart(e, card) {
+        if (this.images.length <= 1) return;
+
+        e.preventDefault();
+        this.isDragging = true;
+        this.activeCard = card;
+        this.dragStartTime = Date.now();
+
+        const point = e.touches ? e.touches[0] : e;
+
+        this.dragStartX = point.clientX;
+        this.dragStartY = point.clientY;
+        this.dragOffsetX = 0;
+        this.dragOffsetY = 0;
+        this.initialTransform = card.style.transform;
+
+        card.classList.add('dragging');
+        card.classList.remove('hovered');
+      }
+
+      onDragMove(e) {
+        if (!this.isDragging || !this.activeCard) return;
+
+        e.preventDefault();
+        const point = e.touches ? e.touches[0] : e;
+
+        this.dragOffsetX = point.clientX - this.dragStartX;
+        this.dragOffsetY = point.clientY - this.dragStartY;
+
+        // Apply drag transform
+        const rotation = this.dragOffsetX * 0.05; // Slight rotation based on drag
+        this.activeCard.style.transform = `translate(${this.dragOffsetX}px, ${this.dragOffsetY}px) rotate(${rotation}deg)`;
+      }
+
+      onDragEnd(e) {
+        if (!this.isDragging || !this.activeCard) return;
+
+        const card = this.activeCard;
+        const dragDistance = Math.abs(this.dragOffsetX);
+        const dragTime = Date.now() - this.dragStartTime;
+        const velocity = dragDistance / dragTime;
+
+        // Determine if it's a swipe (fast or far enough)
+        const isSwipe = dragDistance > 100 || (velocity > 0.5 && dragDistance > 30);
+
+        if (isSwipe) {
+          // Animate card out
+          const direction = this.dragOffsetX > 0 ? 1 : -1;
+          const exitX = direction * window.innerWidth;
+
+          card.classList.add('animating-out');
+          card.style.transform = `translate(${exitX}px, ${this.dragOffsetY}px) rotate(${direction * 30}deg)`;
+          card.style.opacity = '0';
+
+          setTimeout(() => {
+            // Navigate to next/prev
+            this.navigate(direction);
+          }, 300);
+        } else {
+          // Snap back
+          card.classList.add('animating-back');
+          card.style.transform = this.initialTransform;
+
+          setTimeout(() => {
+            card.classList.remove('animating-back');
+          }, 500);
+        }
+
+        card.classList.remove('dragging');
+        this.isDragging = false;
+        this.activeCard = null;
+      }
+
+      navigate(direction) {
+        const count = this.images.length;
+        if (count <= 1) return;
+
+        this.currentIndex = (this.currentIndex - direction + count) % count;
+        this.render();
+
+        if (this.onImageSelect) {
+          this.onImageSelect(this.currentIndex, this.images[this.currentIndex]);
+        }
+      }
+
+      bringToFront(index) {
+        if (index === this.currentIndex) return;
+
+        this.currentIndex = index;
+        this.render();
+
+        if (this.onImageSelect) {
+          this.onImageSelect(index, this.images[index]);
+        }
+      }
+
+      // ============================================
+      // PUBLIC API (for Swift bridge)
+      // ============================================
+
+      setImages(images) {
+        this.images = images.map((img, i) => ({
+          id: img.id || `img-${i}`,
+          src: img.src || img,
+          alt: img.alt || `Image ${i + 1}`
+        }));
+        this.currentIndex = Math.min(this.currentIndex, Math.max(0, this.images.length - 1));
+        this.render();
+
+        if (this.onImagesChange) {
+          this.onImagesChange(this.images);
+        }
+      }
+
+      addImage(image) {
+        const newImage = {
+          id: image.id || `img-${Date.now()}`,
+          src: image.src || image,
+          alt: image.alt || `Image ${this.images.length + 1}`
+        };
+        this.images.push(newImage);
+        this.currentIndex = this.images.length - 1;
+        this.render();
+
+        if (this.onImagesChange) {
+          this.onImagesChange(this.images);
+        }
+      }
+
+      removeImage(index) {
+        if (index < 0 || index >= this.images.length) return;
+
+        this.images.splice(index, 1);
+        this.currentIndex = Math.min(this.currentIndex, Math.max(0, this.images.length - 1));
+        this.render();
+
+        if (this.onImagesChange) {
+          this.onImagesChange(this.images);
+        }
+      }
+
+      removeCurrentImage() {
+        this.removeImage(this.currentIndex);
+      }
+
+      getImages() {
+        return this.images;
+      }
+
+      getCurrentIndex() {
+        return this.currentIndex;
+      }
+
+      getCurrentImage() {
+        return this.images[this.currentIndex] || null;
+      }
+    }
+
+    // ============================================
+    // DEMO INITIALIZATION
+    // ============================================
+
+    // Sample images from Unsplash
+    const sampleImages = [
+      { id: '1', src: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=450&fit=crop', alt: 'Mountains' },
+      { id: '2', src: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&h=450&fit=crop', alt: 'Beach' },
+      { id: '3', src: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=600&h=450&fit=crop', alt: 'Night Mountains' },
+      { id: '4', src: 'https://images.unsplash.com/photo-1504198453319-5ce911bafcde?w=600&h=450&fit=crop', alt: 'Northern Lights' },
+      { id: '5', src: 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=600&h=450&fit=crop', alt: 'Forest' },
+      { id: '6', src: 'https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?w=600&h=450&fit=crop', alt: 'Woods Path' },
+    ];
+
+    // Initialize component
+    const imagePile = new ImagePileComponent(
+      document.getElementById('componentContainer'),
+      {
+        images: sampleImages,
+        onImagesChange: (images) => {
+          console.log('Images changed:', images.length, 'images');
+          // Swift bridge: window.webkit.messageHandlers.imagesChanged.postMessage(images);
+        },
+        onImageSelect: (index, image) => {
+          console.log('Image selected:', index, image.alt);
+          // Swift bridge: window.webkit.messageHandlers.imageSelected.postMessage({index, image});
+        }
+      }
+    );
+
+    // ============================================
+    // DEMO CONTROLS
+    // ============================================
+
+    function addImages() {
+      document.getElementById('fileInput').click();
+    }
+
+    function handleFileSelect(event) {
+      const files = event.target.files;
+
+      Array.from(files).forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          imagePile.addImage({
+            id: `uploaded-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            src: e.target.result,
+            alt: file.name
+          });
+        };
+        reader.readAsDataURL(file);
+      });
+
+      // Reset input
+      event.target.value = '';
+    }
+
+    function removeTopImage() {
+      imagePile.removeCurrentImage();
+    }
+
+    // Expose for Swift bridge
+    window.imagePile = imagePile;
+  </script>
+</body>
+</html>

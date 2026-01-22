@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Image Pile Component</title>
+  <style>
+    :root {
+      --pile-bg: transparent;
+      --card-radius: 12px;
+      --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+      --card-shadow-hover: 0 15px 40px rgba(0, 0, 0, 0.35);
+      --card-shadow-top: 0 20px 50px rgba(0, 0, 0, 0.4);
+      --arrow-bg: rgba(255, 255, 255, 0.1);
+      --arrow-color: rgba(255, 255, 255, 0.6);
+      --dot-color: rgba(255, 255, 255, 0.3);
+      --dot-active: rgba(255, 255, 255, 0.9);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--pile-bg);
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    .component-container {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Single Image Mode */
+    .single-image {
+      max-width: 100%;
+      max-height: 100%;
+      border-radius: var(--card-radius);
+      object-fit: contain;
+      box-shadow: var(--card-shadow-top);
+    }
+
+    /* Pile Mode */
+    .pile-container {
+      position: relative;
+      width: 70%;
+      height: 75%;
+      max-width: 500px;
+      max-height: 400px;
+    }
+
+    .pile-card {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: var(--card-radius);
+      overflow: hidden;
+      cursor: grab;
+      transition: transform 0.4s cubic-bezier(0.23, 1, 0.32, 1), box-shadow 0.3s ease;
+      box-shadow: var(--card-shadow);
+      will-change: transform;
+      -webkit-user-select: none;
+      user-select: none;
+      background: #f0f0f0;
+    }
+
+    .pile-card:active { cursor: grabbing; }
+
+    .pile-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      pointer-events: none;
+      -webkit-user-drag: none;
+    }
+
+    .pile-card.hovered:not(.dragging):not(.top-card) {
+      transform: var(--hover-transform) !important;
+      box-shadow: var(--card-shadow-hover);
+    }
+
+    .pile-card.top-card { box-shadow: var(--card-shadow-top); }
+
+    .pile-card.dragging {
+      transition: box-shadow 0.2s ease;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+      z-index: 1000 !important;
+    }
+
+    .pile-card.animating-out {
+      transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.5s ease;
+    }
+
+    .pile-card.animating-back {
+      transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+    }
+
+    /* Navigation Arrows */
+    .nav-arrow {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 36px;
+      height: 36px;
+      border: none;
+      border-radius: 50%;
+      background: var(--arrow-bg);
+      -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
+      color: var(--arrow-color);
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.3s ease, background 0.2s ease, transform 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    .component-container:hover .nav-arrow,
+    .component-container.touch-active .nav-arrow { opacity: 1; }
+
+    .nav-arrow:hover {
+      background: rgba(255, 255, 255, 0.25);
+      color: rgba(255, 255, 255, 0.95);
+      transform: translateY(-50%) scale(1.1);
+    }
+
+    .nav-arrow:active { transform: translateY(-50%) scale(0.95); }
+    .nav-arrow.left { left: 10px; }
+    .nav-arrow.right { right: 10px; }
+
+    .nav-arrow svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      stroke-width: 2.5;
+      fill: none;
+    }
+
+    /* Image Counter */
+    .image-counter {
+      position: absolute;
+      bottom: 15px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 6px;
+      padding: 6px 12px;
+      background: rgba(0, 0, 0, 0.3);
+      -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+    }
+
+    .counter-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--dot-color);
+      transition: background 0.3s ease, transform 0.3s ease;
+    }
+
+    .counter-dot.active {
+      background: var(--dot-active);
+      transform: scale(1.3);
+    }
+
+    /* Empty state */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 80%;
+      max-width: 300px;
+      aspect-ratio: 4 / 3;
+      border: 2px dashed rgba(128, 128, 128, 0.3);
+      border-radius: var(--card-radius);
+      color: rgba(128, 128, 128, 0.6);
+      cursor: pointer;
+      transition: border-color 0.3s ease, color 0.3s ease;
+    }
+
+    .empty-state:hover {
+      border-color: rgba(128, 128, 128, 0.5);
+      color: rgba(128, 128, 128, 0.8);
+    }
+
+    .empty-state svg {
+      width: 40px;
+      height: 40px;
+      margin-bottom: 10px;
+      stroke: currentColor;
+      stroke-width: 1.5;
+      fill: none;
+    }
+
+    .empty-state span { font-size: 13px; }
+
+    /* Edit mode indicators */
+    .component-container.edit-mode .pile-card { cursor: pointer; }
+    .component-container.edit-mode .pile-card::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0);
+      transition: background 0.2s ease;
+    }
+    .component-container.edit-mode .pile-card:hover::after {
+      background: rgba(0, 0, 0, 0.1);
+    }
+  </style>
+</head>
+<body>
+  <div class="component-container" id="componentContainer"></div>
+
+  <script>
+    // ============================================
+    // IMAGE PILE COMPONENT - macOS/Swift Integration
+    // ============================================
+
+    class ImagePileComponent {
+      constructor(container, options = {}) {
+        this.container = container;
+        this.images = [];
+        this.currentIndex = 0;
+        this.isDragging = false;
+        this.dragStartX = 0;
+        this.dragStartY = 0;
+        this.dragOffsetX = 0;
+        this.dragOffsetY = 0;
+        this.activeCard = null;
+        this.dragStartTime = 0;
+        this.initialTransform = '';
+        this.editMode = options.editMode || false;
+
+        this.init();
+      }
+
+      init() {
+        this.render();
+        this.bindEvents();
+        this.notifyReady();
+      }
+
+      // ============================================
+      // SWIFT BRIDGE - Message Handlers
+      // ============================================
+
+      postMessage(handler, data) {
+        try {
+          if (window.webkit?.messageHandlers?.[handler]) {
+            window.webkit.messageHandlers[handler].postMessage(data);
+          }
+        } catch (e) {
+          console.log(`[ImagePile] ${handler}:`, data);
+        }
+      }
+
+      notifyReady() {
+        this.postMessage('componentReady', { version: '1.0.0' });
+      }
+
+      notifyImagesChanged() {
+        this.postMessage('imagesChanged', {
+          images: this.images,
+          count: this.images.length,
+          currentIndex: this.currentIndex
+        });
+      }
+
+      notifyImageSelected(index, image) {
+        this.postMessage('imageSelected', { index, image });
+      }
+
+      notifyEmptyStateClicked() {
+        this.postMessage('emptyStateClicked', {});
+      }
+
+      notifyError(error) {
+        this.postMessage('error', { message: error });
+      }
+
+      // ============================================
+      // RENDERING
+      // ============================================
+
+      generateScatterTransform(index) {
+        const seed = index * 137.5;
+        const rotation = (Math.sin(seed) * 6) - 3;
+        const offsetX = (Math.cos(seed) * 12) - 6;
+        const offsetY = (Math.sin(seed * 2) * 8) - 4;
+        return {
+          rotation, offsetX, offsetY,
+          transform: `translate(${offsetX}px, ${offsetY}px) rotate(${rotation}deg)`
+        };
+      }
+
+      render() {
+        const count = this.images.length;
+        if (count === 0) {
+          this.renderEmptyState();
+        } else if (count === 1) {
+          this.renderSingleImage();
+        } else {
+          this.renderPile();
+        }
+      }
+
+      renderEmptyState() {
+        this.container.innerHTML = `
+          <div class="empty-state" id="emptyState">
+            <svg viewBox="0 0 24 24">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+            <span>Add images</span>
+          </div>
+        `;
+        document.getElementById('emptyState')?.addEventListener('click', () => {
+          this.notifyEmptyStateClicked();
+        });
+      }
+
+      renderSingleImage() {
+        const img = this.images[0];
+        this.container.innerHTML = `
+          <img class="single-image" src="${img.src}" alt="${img.alt || ''}" draggable="false">
+        `;
+      }
+
+      renderPile() {
+        const count = this.images.length;
+        let html = '<div class="pile-container">';
+        const ordered = this.getOrderedImages();
+
+        ordered.forEach((img, vi) => {
+          const scatter = this.generateScatterTransform(img.originalIndex);
+          const zIndex = vi + 1;
+          const isTop = vi === count - 1;
+          const hoverRotation = scatter.rotation * 0.5;
+          const hoverOffsetX = scatter.offsetX + (scatter.offsetX > 0 ? 15 : -15);
+          const hoverOffsetY = scatter.offsetY - 25;
+          const hoverTransform = `translate(${hoverOffsetX}px, ${hoverOffsetY}px) rotate(${hoverRotation}deg) scale(1.02)`;
+
+          html += `
+            <div class="pile-card ${isTop ? 'top-card' : ''}"
+                 data-index="${img.originalIndex}"
+                 data-id="${img.id}"
+                 style="z-index:${zIndex};transform:${scatter.transform};--hover-transform:${hoverTransform};">
+              <img src="${img.src}" alt="${img.alt || ''}" draggable="false">
+            </div>
+          `;
+        });
+
+        html += '</div>';
+        html += `
+          <button class="nav-arrow left" id="navLeft">
+            <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <button class="nav-arrow right" id="navRight">
+            <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        `;
+        html += '<div class="image-counter">';
+        for (let i = 0; i < count; i++) {
+          html += `<div class="counter-dot ${i === this.currentIndex ? 'active' : ''}"></div>`;
+        }
+        html += '</div>';
+
+        this.container.innerHTML = html;
+        this.bindCardEvents();
+      }
+
+      getOrderedImages() {
+        const count = this.images.length;
+        const ordered = [];
+        for (let i = 0; i < count; i++) {
+          const actualIndex = (this.currentIndex + 1 + i) % count;
+          ordered.push({ ...this.images[actualIndex], originalIndex: actualIndex });
+        }
+        return ordered;
+      }
+
+      // ============================================
+      // EVENT HANDLING
+      // ============================================
+
+      bindEvents() {
+        document.addEventListener('mousemove', (e) => this.onDragMove(e));
+        document.addEventListener('mouseup', (e) => this.onDragEnd(e));
+        document.addEventListener('touchmove', (e) => this.onDragMove(e), { passive: false });
+        document.addEventListener('touchend', (e) => this.onDragEnd(e));
+
+        // Show arrows on touch
+        document.addEventListener('touchstart', () => {
+          this.container.classList.add('touch-active');
+        });
+        document.addEventListener('touchend', () => {
+          setTimeout(() => this.container.classList.remove('touch-active'), 2000);
+        });
+      }
+
+      bindCardEvents() {
+        const cards = this.container.querySelectorAll('.pile-card');
+        cards.forEach(card => {
+          card.addEventListener('mouseenter', () => {
+            if (!this.isDragging) card.classList.add('hovered');
+          });
+          card.addEventListener('mouseleave', () => card.classList.remove('hovered'));
+          card.addEventListener('click', () => {
+            if (!this.isDragging && Math.abs(this.dragOffsetX) < 5) {
+              this.bringToFront(parseInt(card.dataset.index));
+            }
+          });
+          card.addEventListener('mousedown', (e) => this.onDragStart(e, card));
+          card.addEventListener('touchstart', (e) => this.onDragStart(e, card), { passive: false });
+        });
+
+        document.getElementById('navLeft')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.navigate(-1);
+        });
+        document.getElementById('navRight')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.navigate(1);
+        });
+      }
+
+      onDragStart(e, card) {
+        if (this.images.length <= 1) return;
+        e.preventDefault();
+        this.isDragging = true;
+        this.activeCard = card;
+        this.dragStartTime = Date.now();
+        const point = e.touches ? e.touches[0] : e;
+        this.dragStartX = point.clientX;
+        this.dragStartY = point.clientY;
+        this.dragOffsetX = 0;
+        this.dragOffsetY = 0;
+        this.initialTransform = card.style.transform;
+        card.classList.add('dragging');
+        card.classList.remove('hovered');
+      }
+
+      onDragMove(e) {
+        if (!this.isDragging || !this.activeCard) return;
+        e.preventDefault();
+        const point = e.touches ? e.touches[0] : e;
+        this.dragOffsetX = point.clientX - this.dragStartX;
+        this.dragOffsetY = point.clientY - this.dragStartY;
+        const rotation = this.dragOffsetX * 0.04;
+        this.activeCard.style.transform = `translate(${this.dragOffsetX}px, ${this.dragOffsetY}px) rotate(${rotation}deg)`;
+      }
+
+      onDragEnd() {
+        if (!this.isDragging || !this.activeCard) return;
+        const card = this.activeCard;
+        const dragDistance = Math.abs(this.dragOffsetX);
+        const dragTime = Date.now() - this.dragStartTime;
+        const velocity = dragDistance / dragTime;
+        const isSwipe = dragDistance > 80 || (velocity > 0.4 && dragDistance > 25);
+
+        if (isSwipe) {
+          const direction = this.dragOffsetX > 0 ? 1 : -1;
+          card.classList.add('animating-out');
+          card.style.transform = `translate(${direction * window.innerWidth}px, ${this.dragOffsetY}px) rotate(${direction * 25}deg)`;
+          card.style.opacity = '0';
+          setTimeout(() => this.navigate(direction), 280);
+        } else {
+          card.classList.add('animating-back');
+          card.style.transform = this.initialTransform;
+          setTimeout(() => card.classList.remove('animating-back'), 500);
+        }
+
+        card.classList.remove('dragging');
+        this.isDragging = false;
+        this.activeCard = null;
+      }
+
+      navigate(direction) {
+        const count = this.images.length;
+        if (count <= 1) return;
+        this.currentIndex = (this.currentIndex - direction + count) % count;
+        this.render();
+        this.notifyImageSelected(this.currentIndex, this.images[this.currentIndex]);
+      }
+
+      bringToFront(index) {
+        if (index === this.currentIndex) return;
+        this.currentIndex = index;
+        this.render();
+        this.notifyImageSelected(index, this.images[index]);
+      }
+
+      // ============================================
+      // PUBLIC API - Called from Swift
+      // ============================================
+
+      setImages(images) {
+        this.images = images.map((img, i) => ({
+          id: img.id || `img-${i}-${Date.now()}`,
+          src: img.src || img,
+          alt: img.alt || ''
+        }));
+        this.currentIndex = Math.min(this.currentIndex, Math.max(0, this.images.length - 1));
+        this.render();
+        this.notifyImagesChanged();
+      }
+
+      addImage(image) {
+        const newImage = {
+          id: image.id || `img-${Date.now()}`,
+          src: image.src || image,
+          alt: image.alt || ''
+        };
+        this.images.push(newImage);
+        this.currentIndex = this.images.length - 1;
+        this.render();
+        this.notifyImagesChanged();
+      }
+
+      addImageAtIndex(image, index) {
+        const newImage = {
+          id: image.id || `img-${Date.now()}`,
+          src: image.src || image,
+          alt: image.alt || ''
+        };
+        this.images.splice(index, 0, newImage);
+        this.currentIndex = index;
+        this.render();
+        this.notifyImagesChanged();
+      }
+
+      removeImage(index) {
+        if (index < 0 || index >= this.images.length) return;
+        this.images.splice(index, 1);
+        this.currentIndex = Math.min(this.currentIndex, Math.max(0, this.images.length - 1));
+        this.render();
+        this.notifyImagesChanged();
+      }
+
+      removeImageById(id) {
+        const index = this.images.findIndex(img => img.id === id);
+        if (index !== -1) this.removeImage(index);
+      }
+
+      removeCurrentImage() {
+        this.removeImage(this.currentIndex);
+      }
+
+      updateImage(index, updates) {
+        if (index < 0 || index >= this.images.length) return;
+        this.images[index] = { ...this.images[index], ...updates };
+        this.render();
+        this.notifyImagesChanged();
+      }
+
+      reorderImages(fromIndex, toIndex) {
+        if (fromIndex < 0 || fromIndex >= this.images.length) return;
+        if (toIndex < 0 || toIndex >= this.images.length) return;
+        const [moved] = this.images.splice(fromIndex, 1);
+        this.images.splice(toIndex, 0, moved);
+        this.currentIndex = toIndex;
+        this.render();
+        this.notifyImagesChanged();
+      }
+
+      clear() {
+        this.images = [];
+        this.currentIndex = 0;
+        this.render();
+        this.notifyImagesChanged();
+      }
+
+      goToIndex(index) {
+        if (index < 0 || index >= this.images.length) return;
+        this.currentIndex = index;
+        this.render();
+        this.notifyImageSelected(index, this.images[index]);
+      }
+
+      setEditMode(enabled) {
+        this.editMode = enabled;
+        this.container.classList.toggle('edit-mode', enabled);
+      }
+
+      // Getters
+      getImages() { return this.images; }
+      getImageCount() { return this.images.length; }
+      getCurrentIndex() { return this.currentIndex; }
+      getCurrentImage() { return this.images[this.currentIndex] || null; }
+      getImageById(id) { return this.images.find(img => img.id === id) || null; }
+      getImageAtIndex(index) { return this.images[index] || null; }
+
+      // Configuration
+      setTheme(theme) {
+        const root = document.documentElement;
+        if (theme.cardRadius) root.style.setProperty('--card-radius', theme.cardRadius);
+        if (theme.arrowBg) root.style.setProperty('--arrow-bg', theme.arrowBg);
+        if (theme.arrowColor) root.style.setProperty('--arrow-color', theme.arrowColor);
+        if (theme.dotColor) root.style.setProperty('--dot-color', theme.dotColor);
+        if (theme.dotActive) root.style.setProperty('--dot-active', theme.dotActive);
+      }
+    }
+
+    // ============================================
+    // INITIALIZATION
+    // ============================================
+
+    window.imagePile = new ImagePileComponent(
+      document.getElementById('componentContainer')
+    );
+
+    // Expose API for Swift evaluation
+    window.ImagePileAPI = {
+      setImages: (json) => window.imagePile.setImages(JSON.parse(json)),
+      addImage: (json) => window.imagePile.addImage(JSON.parse(json)),
+      addImageAtIndex: (json, index) => window.imagePile.addImageAtIndex(JSON.parse(json), index),
+      removeImage: (index) => window.imagePile.removeImage(index),
+      removeImageById: (id) => window.imagePile.removeImageById(id),
+      removeCurrentImage: () => window.imagePile.removeCurrentImage(),
+      updateImage: (index, json) => window.imagePile.updateImage(index, JSON.parse(json)),
+      reorderImages: (from, to) => window.imagePile.reorderImages(from, to),
+      clear: () => window.imagePile.clear(),
+      goToIndex: (index) => window.imagePile.goToIndex(index),
+      setEditMode: (enabled) => window.imagePile.setEditMode(enabled),
+      getState: () => JSON.stringify({
+        images: window.imagePile.getImages(),
+        currentIndex: window.imagePile.getCurrentIndex(),
+        count: window.imagePile.getImageCount()
+      }),
+      setTheme: (json) => window.imagePile.setTheme(JSON.parse(json))
+    };
+  </script>
+</body>
+</html>
